@@ -96,7 +96,8 @@ class Turbolinks.Visit
     @adapter.visitRequestCompleted(this)
 
   requestFailedWithStatusCode: (statusCode, @response) ->
-    @adapter.visitRequestFailedWithStatusCode(this, statusCode)
+    unless @hasCachedSnapshot()
+      @adapter.visitRequestFailedWithStatusCode(this, statusCode)
 
   requestFinished: ->
     @recordTimingMetric("requestEnd")
