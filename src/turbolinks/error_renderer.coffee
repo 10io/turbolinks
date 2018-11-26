@@ -1,20 +1,26 @@
 #= require ./renderer
 
 class Turbolinks.ErrorRenderer extends Turbolinks.Renderer
-  constructor: (@html) ->
+  constructor: (html) ->
+    htmlElement = document.createElement("html")
+    htmlElement.innerHTML = html
+    @newHead = htmlElement.querySelector("head")
+    @newBody = htmlElement.querySelector("body")
 
   render: (callback) ->
     @renderView =>
-      @replaceDocumentHTML()
+      @replaceHeadAndBody()
       @activateBodyScriptElements()
       callback()
 
-  replaceDocumentHTML: ->
-    document.documentElement.innerHTML = @html
+  replaceHeadAndBody: ->
+    {head, body} = document
+    head.parentNode.replaceChild(@newHead, head)
+    body.parentNode.replaceChild(@newBody, body)
 
   activateBodyScriptElements: ->
     for replaceableElement in @getScriptElements()
-      element = @cloneScriptElement(replaceableElement)
+      element = @createScriptElement(replaceableElement)
       replaceableElement.parentNode.replaceChild(element, replaceableElement)
 
   getScriptElements: ->

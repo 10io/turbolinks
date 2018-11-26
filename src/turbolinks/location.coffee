@@ -22,7 +22,7 @@ class Turbolinks.Location
     @absoluteURL.split("/", 3).join("/")
 
   getPath: ->
-    @absoluteURL.match(/\/\/[^/]*(\/[^?;]*)/)?[1] ? "/"
+    @requestURL.match(/\/\/[^/]*(\/[^?;]*)/)?[1] ? "/"
 
   getPathComponents: ->
     @getPath().split("/").slice(1)
@@ -31,11 +31,10 @@ class Turbolinks.Location
     @getPathComponents().slice(-1)[0]
 
   getExtension: ->
-    @getLastPathComponent().match(/\.[^.]*$/)?[0]
+    @getLastPathComponent().match(/\.[^.]*$/)?[0] ? ""
 
   isHTML: ->
-    extension = @getExtension()
-    extension is ".html" or not extension?
+    @getExtension().match(/^(?:|\.(?:htm|html|xhtml))$/)
 
   isPrefixedBy: (location) ->
     prefixURL = getPrefixURL(location)

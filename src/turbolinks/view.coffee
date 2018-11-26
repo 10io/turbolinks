@@ -4,22 +4,21 @@
 
 class Turbolinks.View
   constructor: (@delegate) ->
-    @element = document.documentElement
+    @htmlElement = document.documentElement
 
   getRootLocation: ->
     @getSnapshot().getRootLocation()
 
-  getCacheControlValue: ->
-    @getSnapshot().getCacheControlValue()
+  getElementForAnchor: (anchor) ->
+    @getSnapshot().getElementForAnchor(anchor)
 
-  getSnapshot: ({clone} = {clone: false}) ->
-    element = if clone then @element.cloneNode(true) else @element
-    Turbolinks.Snapshot.fromElement(element)
+  getSnapshot: ->
+    Turbolinks.Snapshot.fromHTMLElement(@htmlElement)
 
   render: ({snapshot, error, isPreview}, callback) ->
     @markAsPreview(isPreview)
     if snapshot?
-      @renderSnapshot(snapshot, callback)
+      @renderSnapshot(snapshot, isPreview, callback)
     else
       @renderError(error, callback)
 
@@ -27,12 +26,12 @@ class Turbolinks.View
 
   markAsPreview: (isPreview) ->
     if isPreview
-      @element.setAttribute("data-turbolinks-preview", "")
+      @htmlElement.setAttribute("data-turbolinks-preview", "")
     else
-      @element.removeAttribute("data-turbolinks-preview")
+      @htmlElement.removeAttribute("data-turbolinks-preview")
 
-  renderSnapshot: (snapshot, callback) ->
-    Turbolinks.SnapshotRenderer.render(@delegate, callback, @getSnapshot(), Turbolinks.Snapshot.wrap(snapshot))
+  renderSnapshot: (snapshot, isPreview, callback) ->
+    Turbolinks.SnapshotRenderer.render(@delegate, callback, @getSnapshot(), Turbolinks.Snapshot.wrap(snapshot), isPreview)
 
   renderError: (error, callback) ->
     Turbolinks.ErrorRenderer.render(@delegate, callback, error)

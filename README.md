@@ -1,6 +1,6 @@
-# Turbolinks™
+# Turbolinks
 
-**Turbolinks makes navigating your web application faster.** Get the performance benefits of a single-page application without the added complexity of a client-side JavaScript framework. Use HTML to render your views on the server side and link to pages as usual. When you follow a link, Turbolinks automatically fetches the page, swaps in its `<body>`, and merges its `<head>`, all without incurring the cost of a full page load.
+**Turbolinks® makes navigating your web application faster.** Get the performance benefits of a single-page application without the added complexity of a client-side JavaScript framework. Use HTML to render your views on the server side and link to pages as usual. When you follow a link, Turbolinks automatically fetches the page, swaps in its `<body>`, and merges its `<head>`, all without incurring the cost of a full page load.
 
 ![Turbolinks](https://s3.amazonaws.com/turbolinks-docs/images/turbolinks.gif)
 
@@ -19,40 +19,72 @@ Turbolinks works in all modern desktop and mobile browsers. It depends on the [H
 
 Include [`dist/turbolinks.js`](dist/turbolinks.js) in your application’s JavaScript bundle.
 
+Turbolinks automatically initializes itself when loaded via a standalone `<script>` tag or a traditional concatenated JavaScript bundle. If you load Turbolinks as a CommonJS or AMD module, first require the module, then call the provided `start()` function.
+
 ### Installation Using Ruby on Rails
 
 Your Ruby on Rails application can use the [`turbolinks` RubyGem](https://github.com/turbolinks/turbolinks-rails) to install Turbolinks. This gem contains a Rails engine which integrates seamlessly with the Rails asset pipeline.
 
-1. Add the `turbolinks` gem, version 5, to your Gemfile: `gem 'turbolinks', '~> 5.0.0.beta'`
+1. Add the `turbolinks` gem, version 5, to your Gemfile: `gem 'turbolinks', '~> 5.2.0'`
 2. Run `bundle install`.
 3. Add `//= require turbolinks` to your JavaScript manifest file (usually found at `app/assets/javascripts/application.js`).
 
-The gem also provides server-side support for Turbolinks redirection.
+The gem also provides server-side support for Turbolinks redirection, which can be used without the asset pipeline.
 
-### Installation Using Webpack
+### Installation Using npm
 
-Your application can use the [`turbolinks` npm package](https://www.npmjs.com/package/turbolinks) to install Turbolinks in a [Webpack](http://webpack.github.io/) asset bundle.
+Your application can use the [`turbolinks` npm package](https://www.npmjs.com/package/turbolinks) to install Turbolinks as a module for build tools like [webpack](http://webpack.github.io/).
 
 1. Add the `turbolinks` package to your application: `npm install --save turbolinks`.
-2. Add `turbolinks` to the `entry` section of webpack.config.js:
+2. Require and start Turbolinks in your JavaScript bundle:
 
     ```js
-    entry: {
-      vendor: [ ...,
-        'turbolinks',
-      ],
-    },
+    var Turbolinks = require("turbolinks")
+    Turbolinks.start()
     ```
+The npm package alone does not provide server-side support for Turbolinks redirection. See [Following Redirects](#following-redirects) for details on adding support.
 
-3. Set up Turbolinks in the `module.loaders` section of webpack.config.js:
+#### Table of Contents
 
-    ```js
-    module: {
-      loaders: [ ...,
-        { test: require.resolve('turbolinks'), loader: 'imports?this=>window' },
-      ],
-    },
-    ```
+[Navigating with Turbolinks](#navigating-with-turbolinks)
+- [Each Navigation is a Visit](#each-navigation-is-a-visit)
+- [Application Visits](#application-visits)
+- [Restoration Visits](#restoration-visits)
+- [Canceling Visits Before They Start](#canceling-visits-before-they-start)
+- [Disabling Turbolinks on Specific Links](#disabling-turbolinks-on-specific-links)
+
+[Building Your Turbolinks Application](#building-your-turbolinks-application)
+- [Working with Script Elements](#working-with-script-elements)
+  - [Loading Your Application’s JavaScript Bundle](#loading-your-applications-javascript-bundle)
+- [Understanding Caching](#understanding-caching)
+  - [Preparing the Page to be Cached](#preparing-the-page-to-be-cached)
+  - [Detecting When a Preview is Visible](#detecting-when-a-preview-is-visible)
+  - [Opting Out of Caching](#opting-out-of-caching)
+- [Installing JavaScript Behavior](#installing-javascript-behavior)
+  - [Observing Navigation Events](#observing-navigation-events)
+  - [Attaching Behavior With Stimulus](#attaching-behavior-with-stimulus)
+- [Making Transformations Idempotent](#making-transformations-idempotent)
+- [Persisting Elements Across Page Loads](#persisting-elements-across-page-loads)
+
+[Advanced Usage](#advanced-usage)
+- [Displaying Progress](#displaying-progress)
+- [Reloading When Assets Change](#reloading-when-assets-change)
+- [Ensuring Specific Pages Trigger a Full Reload](#ensuring-specific-pages-trigger-a-full-reload)
+- [Setting a Root Location](#setting-a-root-location)
+- [Following Redirects](#following-redirects)
+- [Redirecting After a Form Submission](#redirecting-after-a-form-submission)
+- [Setting Custom HTTP Headers](#setting-custom-http-headers)
+
+[API Reference](#api-reference)
+- [Turbolinks.visit](#turbolinksvisit)
+- [Turbolinks.clearCache](#turbolinksclearcache)
+- [Turbolinks.setProgressBarDelay](#turbolinkssetprogressbardelay)
+- [Turbolinks.supported](#turbolinkssupported)
+- [Full List of Events](#full-list-of-events)
+
+[Contributing to Turbolinks](#contributing-to-turbolinks)
+- [Building From Source](#building-from-source)
+- [Running Tests](#running-tests)
 
 # Navigating with Turbolinks
 
@@ -154,29 +186,30 @@ In particular, you can no longer depend on a full page load to reset your enviro
 
 With awareness and a little extra care, you can design your application to gracefully handle this constraint without tightly coupling it to Turbolinks.
 
-## Running JavaScript When a Page Loads
-
-You may be used to installing JavaScript behavior in response to the `window.onload`, `DOMContentLoaded`, or jQuery `ready` events. With Turbolinks, these events will fire only in response to the initial page load—not after any subsequent page changes.
-
-In many cases, you can simply adjust your code to listen for the `turbolinks:load` event, which fires once on the initial page load and again after every Turbolinks visit.
-
-```js
-document.addEventListener("turbolinks:load", function() {
-  // ...
-})
-```
-
-When possible, avoid using the `turbolinks:load` event to add event listeners directly to elements on the page body. Instead, consider using [event delegation](https://learn.jquery.com/events/event-delegation/) to register event listeners once on `document` or `window`.
-
 ## Working with Script Elements
 
 Your browser automatically loads and evaluates any `<script>` elements present on the initial page load.
 
-When you navigate to a new page, Turbolinks looks for any `<script>` elements in the new page’s `<head>` that aren’t present on the current page. Then it appends them to the current `<head>` where they’re loaded and evaluated by the browser. You can use this to load additional JavaScript files on-demand.
+When you navigate to a new page, Turbolinks looks for any `<script>` elements in the new page’s `<head>` which aren’t present on the current page. Then it appends them to the current `<head>` where they’re loaded and evaluated by the browser. You can use this to load additional JavaScript files on-demand.
 
 Turbolinks evaluates `<script>` elements in a page’s `<body>` each time it renders the page. You can use inline body scripts to set up per-page JavaScript state or bootstrap client-side models. To install behavior, or to perform more complex operations when the page changes, avoid script elements and use the `turbolinks:load` event instead.
 
 Annotate `<script>` elements with `data-turbolinks-eval="false"` if you do not want Turbolinks to evaluate them after rendering. Note that this annotation will not prevent your browser from evaluating scripts on the initial page load.
+
+### Loading Your Application’s JavaScript Bundle
+
+Always make sure to load your application’s JavaScript bundle using `<script>` elements in the `<head>` of your document. Otherwise, Turbolinks will reload the bundle with every page change.
+
+```html
+<head>
+  ...
+  <script src="/application-cbd3cd4.js" defer></script>
+</head>
+```
+
+If you have traditionally placed application scripts at the end of `<body>` for performance reasons, consider using the [`<script defer>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script#attr-defer) attribute instead. It has [widespread browser support](https://caniuse.com/#feat=script-defer) and allows you to keep your scripts in `<head>` for Turbolinks compatibility.
+
+You should also consider configuring your asset packaging system to fingerprint each script so it has a new URL when its contents change. Then you can use the `data-turbolinks-track` attribute to force a full page reload when you deploy a new JavaScript bundle. See [Reloading When Assets Change](#reloading-when-assets-change) for information.
 
 ## Understanding Caching
 
@@ -225,6 +258,66 @@ To specify that a page should not be cached at all, use the `no-cache` directive
 
 To completely disable caching in your application, ensure every page contains a no-cache directive.
 
+## Installing JavaScript Behavior
+
+You may be used to installing JavaScript behavior in response to the `window.onload`, `DOMContentLoaded`, or jQuery `ready` events. With Turbolinks, these events will fire only in response to the initial page load, not after any subsequent page changes. We compare two strategies for connecting JavaScript behavior to the DOM below.
+
+### Observing Navigation Events
+
+Turbolinks triggers a series of events during navigation. The most significant of these is the `turbolinks:load` event, which fires once on the initial page load, and again after every Turbolinks visit.
+
+You can observe the `turbolinks:load` event in place of `DOMContentLoaded` to set up JavaScript behavior after every page change:
+
+```js
+document.addEventListener("turbolinks:load", function() {
+  // ...
+})
+```
+
+Keep in mind that your application will not always be in a pristine state when this event is fired, and you may need to clean up behavior installed for the previous page.
+
+Also note that Turbolinks navigation may not be the only source of page updates in your application, so you may wish to move your initialization code into a separate function which you can call from `turbolinks:load` and anywhere else you may change the DOM.
+
+When possible, avoid using the `turbolinks:load` event to add other event listeners directly to elements on the page body. Instead, consider using [event delegation](https://learn.jquery.com/events/event-delegation/) to register event listeners once on `document` or `window`.
+
+See the [Full List of Events](#full-list-of-events) for more information.
+
+### Attaching Behavior With Stimulus
+
+New DOM elements can appear on the page at any time by way of Ajax request handlers, WebSocket handlers, or client-side rendering operations, and these elements often need to be initialized as if they came from a fresh page load.
+
+You can handle all of these updates, including updates from Turbolinks page loads, in a single place with the conventions and lifecycle callbacks provided by Turbolinks’ sister framework, [Stimulus](https://github.com/stimulusjs/stimulus).
+
+Stimulus lets you annotate your HTML with controller, action, and target attributes:
+
+```html
+<div data-controller="hello">
+  <input data-target="hello.name" type="text">
+  <button data-action="click->hello#greet">Greet</button>
+</div>
+```
+
+Implement a compatible controller and Stimulus connects it automatically:
+
+```js
+// hello_controller.js
+import { Controller } from "stimulus"
+
+export default class extends Controller {
+  greet() {
+    console.log(`Hello, ${this.name}!`)
+  }
+
+  get name() {
+    return this.targets.find("name").value
+  }
+}
+```
+
+Stimulus connects and disconnects these controllers and their associated event handlers whenever the document changes using the [MutationObserver](https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver) API. As a result, it handles Turbolinks page changes the same way it handles any other type of DOM update.
+
+See the [Stimulus repository on GitHub](https://github.com/stimulusjs/stimulus) for more information.
+
 ## Making Transformations Idempotent
 
 Often you’ll want to perform client-side transformations to HTML received from the server. For example, you might want to use the browser’s knowledge of the user’s current time zone to group a collection of elements by date.
@@ -238,16 +331,6 @@ To avoid this problem, make your transformation function _idempotent_. An idempo
 One technique for making a transformation idempotent is to keep track of whether you’ve already performed it by setting a `data` attribute on each processed element. When Turbolinks restores your page from cache, these attributes will still be present. Detect these attributes in your transformation function to determine which elements have already been processed.
 
 A more robust technique is simply to detect the transformation itself. In the date grouping example above, that means checking for the presence of a date divider before inserting a new one. This approach gracefully handles newly inserted elements that weren’t processed by the original transformation.
-
-## Responding to Page Updates
-
-Turbolinks may not be the only source of page updates in your application. New HTML can appear at any time from Ajax requests, WebSocket connections, or other client-side rendering operations, and this content will need to be initialized as if it came from a fresh page load.
-
-You can handle all of these updates, including updates from Turbolinks page loads, in a single place with the precise lifecycle callbacks provided by [`MutationObserver`](https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver) and [Custom Elements](https://developer.mozilla.org/en-US/docs/Web/Web_Components/Custom_Elements).
-
-In particular, these APIs give you callbacks when elements are attached to and removed from the document. You can use these callbacks to perform transformations and register or tear down behavior as soon as matching elements appear on the page, regardless of how they were added.
-
-By taking advantage of `MutationObserver`, Custom Elements, and [idempotent transformations](#making-transformations-idempotent), there’s little need to couple your application to Turbolinks’ events.
 
 ## Persisting Elements Across Page Loads
 
@@ -271,7 +354,7 @@ Before each render, Turbolinks matches all permanent elements by `id` and transf
 
 During Turbolinks navigation, the browser will not display its native progress indicator. Turbolinks installs a CSS-based progress bar to provide feedback while issuing a request.
 
-The progress bar is enabled by default. It appears automatically for any page that takes longer than 500ms to load.
+The progress bar is enabled by default. It appears automatically for any page that takes longer than 500ms to load. (You can change this delay with the [`Turbolinks.setProgressBarDelay`](#turbolinkssetprogressbardelay) method.)
 
 The progress bar is a `<div>` element with the class name `turbolinks-progress-bar`. Its default styles appear first in the document and can be overridden by rules that come later.
 
@@ -294,7 +377,7 @@ To disable the progress bar entirely, set its `visibility` style to `hidden`:
 
 ## Reloading When Assets Change
 
-Turbolinks can track the URLs of asset elements in `<head>` from one page to the next, and automatically issue a full reload if they change. This ensures that users always have the latest versions of your application’s scripts and styles.
+Turbolinks can track the URLs of asset elements in `<head>` from one page to the next and automatically issue a full reload if they change. This ensures that users always have the latest versions of your application’s scripts and styles.
 
 Annotate asset elements with `data-turbolinks-track="reload"` and include a version identifier in your asset URLs. The identifier could be a number, a last-modified timestamp, or better, a digest of the asset’s contents, as in the following example.
 
@@ -306,9 +389,18 @@ Annotate asset elements with `data-turbolinks-track="reload"` and include a vers
 </head>
 ```
 
-You can use asset tracking with any HTML element, such as `<link>`, `<script>`, or even `<meta>`. An element annotated with `data-turbolinks-track="reload"` will trigger a full reload if it changes in any way, e.g. if its attributes are not identical, or if the element is present on one page but not on the next.
+## Ensuring Specific Pages Trigger a Full Reload
 
-Note that Turbolinks will only consider tracked assets in `<head>` and not elsewhere on the page.
+You can ensure visits to a certain page will always trigger a full reload by including a `<meta name="turbolinks-visit-control">` element in the page’s `<head>`.
+
+```html
+<head>
+  ...
+  <meta name="turbolinks-visit-control" content="reload">
+</head>
+```
+
+This setting may be useful as a workaround for third-party JavaScript libraries that don’t interact well with Turbolinks page changes.
 
 ## Setting a Root Location
 
@@ -331,7 +423,7 @@ When you visit location `/one` and the server redirects you to location `/two`, 
 
 However, Turbolinks makes requests using `XMLHttpRequest`, which transparently follows redirects. There’s no way for Turbolinks to tell whether a request resulted in a redirect without additional cooperation from the server.
 
-To work around this problem, send the `Turbolinks-Location` header in response to a visit that was redirected, and Turbolinks will replace the browser’s topmost history entry with the value you provide.
+To work around this problem, send the `Turbolinks-Location` header in the final response to a visit that was redirected, and Turbolinks will replace the browser’s topmost history entry with the value you provide.
 
 The Turbolinks Rails engine sets `Turbolinks-Location` automatically when using `redirect_to` in response to a Turbolinks visit.
 
@@ -384,6 +476,17 @@ Turbolinks.clearCache()
 ```
 
 Removes all entries from the Turbolinks page cache. Call this when state has changed on the server that may affect cached pages.
+
+## Turbolinks.setProgressBarDelay
+
+Usage:
+```js
+Turbolinks.setProgressBarDelay(delayInMilliseconds)
+```
+
+Sets the delay after which the [progress bar](#displaying-progress) will appear during navigation, in milliseconds. The progress bar appears after 500ms by default.
+
+Note that this method has no effect when used with the iOS or Android adapters.
 
 ## Turbolinks.supported
 
@@ -439,8 +542,18 @@ $ bin/blade build
 
 ## Running Tests
 
-Follow the instructions for _Building From Source_ above. Then run `bin/blade runner` and visit the displayed URL in your browser. The Turbolinks test suite will start automatically.
+The Turbolinks test suite is written in [TypeScript](https://www.typescriptlang.org) with the [Intern testing library](https://theintern.io).
+
+To run the tests, first make sure you have the [Yarn package manager](https://yarnpkg.com) installed. Follow the instructions for _Building From Source_ above, then run the following commands:
+
+```
+$ cd test
+$ yarn install
+$ yarn test
+```
+
+If you are testing changes to the Turbolinks source, remember to run `bin/blade build` before each test run.
 
 ---
 
-© 2016 Basecamp, LLC
+© 2018 Basecamp, LLC.

@@ -1,18 +1,18 @@
 #= require ./renderer
-#= require ./head_details
 
 class Turbolinks.SnapshotRenderer extends Turbolinks.Renderer
-  constructor: (@currentSnapshot, @newSnapshot) ->
-    @currentHeadDetails = new Turbolinks.HeadDetails @currentSnapshot.head
-    @newHeadDetails = new Turbolinks.HeadDetails @newSnapshot.head
-    @newBody = @newSnapshot.body.cloneNode(true)
+  constructor: (@currentSnapshot, @newSnapshot, @isPreview) ->
+    @currentHeadDetails = @currentSnapshot.headDetails
+    @newHeadDetails = @newSnapshot.headDetails
+    @currentBody = @currentSnapshot.bodyElement
+    @newBody = @newSnapshot.bodyElement
 
   render: (callback) ->
-    if @trackedElementsAreIdentical()
+    if @shouldRender()
       @mergeHead()
       @renderView =>
         @replaceBody()
-        @focusFirstAutofocusableElement()
+        @focusFirstAutofocusableElement() unless @isPreview
         callback()
     else
       @invalidateView()
@@ -24,20 +24,24 @@ class Turbolinks.SnapshotRenderer extends Turbolinks.Renderer
     @copyNewHeadProvisionalElements()
 
   replaceBody: ->
-    @activateBodyScriptElements()
-    @importBodyPermanentElements()
+    placeholders = @relocateCurrentBodyPermanentElements()
+    @activateNewBodyScriptElements()
     @assignNewBody()
+    @replacePlaceholderElementsWithClonedPermanentElements(placeholders)
+
+  shouldRender: ->
+    @newSnapshot.isVisitable() and @trackedElementsAreIdentical()
 
   trackedElementsAreIdentical: ->
     @currentHeadDetails.getTrackedElementSignature() is @newHeadDetails.getTrackedElementSignature()
 
   copyNewHeadStylesheetElements: ->
     for element in @getNewHeadStylesheetElements()
-      document.head.appendChild(element.cloneNode(true))
+      document.head.appendChild(element)
 
   copyNewHeadScriptElements: ->
     for element in @getNewHeadScriptElements()
-      document.head.appendChild(@cloneScriptElement(element))
+      document.head.appendChild(@createScriptElement(element))
 
   removeCurrentHeadProvisionalElements: ->
     for element in @getCurrentHeadProvisionalElements()
@@ -45,23 +49,31 @@ class Turbolinks.SnapshotRenderer extends Turbolinks.Renderer
 
   copyNewHeadProvisionalElements: ->
     for element in @getNewHeadProvisionalElements()
-      document.head.appendChild(element.cloneNode(true))
+      document.head.appendChild(element)
 
-  importBodyPermanentElements: ->
-    for replaceableElement in @getNewBodyPermanentElements()
-      if element = @findCurrentBodyPermanentElement(replaceableElement)
-        replaceableElement.parentNode.replaceChild(element, replaceableElement)
+  relocateCurrentBodyPermanentElements: ->
+    for permanentElement in @getCurrentBodyPermanentElements()
+      placeholder = createPlaceholderForPermanentElement(permanentElement)
+      newElement = @newSnapshot.getPermanentElementById(permanentElement.id)
+      replaceElementWithElement(permanentElement, placeholder.element)
+      replaceElementWithElement(newElement, permanentElement)
+      placeholder
 
-  activateBodyScriptElements: ->
-    for replaceableElement in @getNewBodyScriptElements()
-      element = @cloneScriptElement(replaceableElement)
-      replaceableElement.parentNode.replaceChild(element, replaceableElement)
+  replacePlaceholderElementsWithClonedPermanentElements: (placeholders) ->
+    for { element, permanentElement } in placeholders
+      clonedElement = permanentElement.cloneNode(true)
+      replaceElementWithElement(element, clonedElement)
+
+  activateNewBodyScriptElements: ->
+    for inertScriptElement in @getNewBodyScriptElements()
+      activatedScriptElement = @createScriptElement(inertScriptElement)
+      replaceElementWithElement(inertScriptElement, activatedScriptElement)
 
   assignNewBody: ->
     document.body = @newBody
 
   focusFirstAutofocusableElement: ->
-    @findFirstAutofocusableElement()?.focus()
+    @newSnapshot.findFirstAutofocusableElement()?.focus()
 
   getNewHeadStylesheetElements: ->
     @newHeadDetails.getStylesheetElementsNotInDetails(@currentHeadDetails)
@@ -75,14 +87,18 @@ class Turbolinks.SnapshotRenderer extends Turbolinks.Renderer
   getNewHeadProvisionalElements: ->
     @newHeadDetails.getProvisionalElements()
 
-  getNewBodyPermanentElements: ->
-    @newBody.querySelectorAll("[id][data-turbolinks-permanent]")
-
-  findCurrentBodyPermanentElement: (element) ->
-    document.body.querySelector("##{element.id}[data-turbolinks-permanent]")
+  getCurrentBodyPermanentElements: ->
+    @currentSnapshot.getPermanentElementsPresentInSnapshot(@newSnapshot)
 
   getNewBodyScriptElements: ->
     @newBody.querySelectorAll("script")
 
-  findFirstAutofocusableElement: ->
-    document.body.querySelector("[autofocus]")
+createPlaceholderForPermanentElement = (permanentElement) ->
+  element = document.createElement("meta")
+  element.setAttribute("name", "turbolinks-permanent-placeholder")
+  element.setAttribute("content", permanentElement.id)
+  { element, permanentElement }
+
+replaceElementWithElement = (fromElement, toElement) ->
+  if parentElement = fromElement.parentNode
+    parentElement.replaceChild(toElement, fromElement)

@@ -1,5 +1,6 @@
 class Turbolinks.ScrollManager
   constructor: (@delegate) ->
+    @onScroll = Turbolinks.throttle(@onScroll)
 
   start: ->
     unless @started

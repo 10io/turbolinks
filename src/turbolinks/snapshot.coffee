@@ -1,23 +1,29 @@
+#= require ./head_details
+
 class Turbolinks.Snapshot
   @wrap: (value) ->
     if value instanceof this
       value
+    else if typeof value == "string"
+      @fromHTMLString(value)
     else
-      @fromHTML(value)
+      @fromHTMLElement(value)
 
-  @fromHTML: (html) ->
-    element = document.createElement("html")
-    element.innerHTML = html
-    @fromElement(element)
+  @fromHTMLString: (html) ->
+    htmlElement = document.createElement("html")
+    htmlElement.innerHTML = html
+    @fromHTMLElement(htmlElement)
 
-  @fromElement: (element) ->
-    new this
-      head: element.querySelector("head")
-      body: element.querySelector("body")
+  @fromHTMLElement: (htmlElement) ->
+    headElement = htmlElement.querySelector("head")
+    bodyElement = htmlElement.querySelector("body") ? document.createElement("body")
+    headDetails = Turbolinks.HeadDetails.fromHeadElement(headElement)
+    new this headDetails, bodyElement
 
-  constructor: ({head, body}) ->
-    @head = head ? document.createElement("head")
-    @body = body ? document.createElement("body")
+  constructor: (@headDetails, @bodyElement) ->
+
+  clone: ->
+    new @constructor @headDetails, @bodyElement.cloneNode(true)
 
   getRootLocation: ->
     root = @getSetting("root") ? "/"
@@ -26,14 +32,34 @@ class Turbolinks.Snapshot
   getCacheControlValue: ->
     @getSetting("cache-control")
 
+  getElementForAnchor: (anchor) ->
+    try @bodyElement.querySelector("[id='#{anchor}'], a[name='#{anchor}']")
+
+  getPermanentElements: ->
+    @bodyElement.querySelectorAll("[id][data-turbolinks-permanent]")
+
+  getPermanentElementById: (id) ->
+    @bodyElement.querySelector("##{id}[data-turbolinks-permanent]")
+
+  getPermanentElementsPresentInSnapshot: (snapshot) ->
+    element for element in @getPermanentElements() when snapshot.getPermanentElementById(element.id)
+
+  findFirstAutofocusableElement: ->
+    @bodyElement.querySelector("[autofocus]")
+
   hasAnchor: (anchor) ->
-    @body.querySelector("##{anchor}")?
+    @getElementForAnchor(anchor)?
 
   isPreviewable: ->
     @getCacheControlValue() isnt "no-preview"
 
+  isCacheable: ->
+    @getCacheControlValue() isnt "no-cache"
+
+  isVisitable: ->
+    @getSetting("visit-control") isnt "reload"
+
   # Private
 
   getSetting: (name) ->
-    [..., element] = @head.querySelectorAll("meta[name='turbolinks-#{name}']")
-    element?.getAttribute("content")
+    @headDetails.getMetaValue("turbolinks-#{name}")

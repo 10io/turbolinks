@@ -3,7 +3,7 @@
 #= require ./history
 #= require ./view
 #= require ./scroll_manager
-#= require ./cache
+#= require ./snapshot_cache
 #= require ./visit
 
 class Turbolinks.Controller
@@ -13,9 +13,10 @@ class Turbolinks.Controller
     @scrollManager = new Turbolinks.ScrollManager this
     @restorationData = {}
     @clearCache()
+    @setProgressBarDelay(500)
 
   start: ->
-    unless @started
+    if Turbolinks.supported and not @started
       addEventListener("click", @clickCaptured, true)
       addEventListener("DOMContentLoaded", @pageLoaded, false)
       @scrollManager.start()
@@ -35,7 +36,7 @@ class Turbolinks.Controller
       @started = false
 
   clearCache: ->
-    @cache = new Turbolinks.Cache 10
+    @cache = new Turbolinks.SnapshotCache 10
 
   visit: (location, options = {}) ->
     location = Turbolinks.Location.wrap(location)
@@ -52,6 +53,9 @@ class Turbolinks.Controller
       @startVisit(location, action, {restorationData})
     else
       window.location = location
+
+  setProgressBarDelay: (delay) ->
+    @progressBarDelay = delay
 
   # History
 
@@ -85,21 +89,23 @@ class Turbolinks.Controller
   # Snapshot cache
 
   getCachedSnapshotForLocation: (location) ->
-    @cache.get(location)
+    @cache.get(location)?.clone()
 
   shouldCacheSnapshot: ->
-    @view.getCacheControlValue() isnt "no-cache"
+    @view.getSnapshot().isCacheable()
 
   cacheSnapshot: ->
     if @shouldCacheSnapshot()
       @notifyApplicationBeforeCachingSnapshot()
-      snapshot = @view.getSnapshot(clone: true)
-      @cache.put(@lastRenderedLocation, snapshot)
+      snapshot = @view.getSnapshot()
+      location = @lastRenderedLocation
+      Turbolinks.defer =>
+        @cache.put(location, snapshot.clone())
 
   # Scrolling
 
   scrollToAnchor: (anchor) ->
-    if element = document.getElementById(anchor)
+    if element = @view.getElementForAnchor(anchor)
       @scrollToElement(element)
     else
       @scrollToPosition(x: 0, y: 0)
@@ -213,10 +219,10 @@ class Turbolinks.Controller
 
   getVisitableLinkForNode: (node) ->
     if @nodeIsVisitable(node)
-      Turbolinks.closest(node, "a[href]:not([target])")
+      Turbolinks.closest(node, "a[href]:not([target]):not([download])")
 
   getVisitableLocationForLink: (link) ->
-    location = new Turbolinks.Location link.href
+    location = new Turbolinks.Location link.getAttribute("href")
     location if @locationIsVisitable(location)
 
   getActionForLink: (link) ->
@@ -236,8 +242,3 @@ class Turbolinks.Controller
 
   getRestorationDataForIdentifier: (identifier) ->
     @restorationData[identifier] ?= {}
-
-do ->
-  Turbolinks.controller = controller = new Turbolinks.Controller
-  controller.adapter = new Turbolinks.BrowserAdapter(controller)
-  controller.start()
